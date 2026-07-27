@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Andy vs Tikus - MoleMash</title>
+    <title>Andy vs Tikus - Smooth Animated</title>
     <style>
         * {
             box-sizing: border-box;
-            touch-action: manipulation; /* Mencegah zoom ganda saat tap cepat di HP */
+            touch-action: manipulation;
         }
         body {
             margin: 0;
@@ -50,7 +50,7 @@
 <body>
 
     <div id="game-container">
-        <h3 style="margin: 5px 0 10px 0;">🧹 Andy vs Tikus</h3>
+        <h3 style="margin: 5px 0 10px 0;">🧹 Andy vs Tikus (Animated)</h3>
         <div class="ui-panel">
             <span id="score-text">Skor: 0</span>
             <span id="status-text" style="color: #ffeb3b;">Siap!</span>
@@ -65,10 +65,21 @@
         const scoreText = document.getElementById('score-text');
         const statusText = document.getElementById('status-text');
 
+        // MEMUAT SPRITE SHEET 5 KOLOM x 2 BARIS (10 FRAME)
+        const spriteSheet = new Image();
+        spriteSheet.src = 'tikus_spritesheet.png'; 
+
+        const SPRITE_COLS = 5;      // 5 Kolom
+        const SPRITE_ROWS = 2;      // 2 Baris
+        const TOTAL_FRAMES = 10;    // Total 10 Frame Animasi
+        
+        let currentFrame = 0;
+        let lastFrameTime = 0;
+        const frameInterval = 70;   // Kecepatan animasi (~14 FPS)
+
         let score = 0;
         let gameActive = true;
 
-        // Posisi 6 Lubang Tikus
         const holes = [
             { x: 80, y: 100 },
             { x: 240, y: 100 },
@@ -80,9 +91,8 @@
 
         let currentRat = {
             holeIndex: -1,
-            hp: 1,
             timer: null,
-            escapeTime: 650 // Durasinya hanya 0.65 detik!
+            escapeTime: 650
         };
 
         function spawnRat() {
@@ -94,27 +104,21 @@
             } while (newHole === currentRat.holeIndex);
 
             currentRat.holeIndex = newHole;
-            currentRat.hp = 1;
 
-            // Semakin tinggi skor, durasi makin cepat (minimal 0.35 detik)
             currentRat.escapeTime = Math.max(350, 650 - Math.floor(score / 50) * 40);
-
             statusText.innerText = "CEPAT! 🐭";
 
             clearTimeout(currentRat.timer);
             currentRat.timer = setTimeout(() => {
-                if (currentRat.hp > 0) {
+                if (currentRat.holeIndex !== -1) {
                     statusText.innerText = "KABUR! 😜";
                     currentRat.holeIndex = -1;
-                    drawGame();
-                    setTimeout(spawnRat, 120); // Tikus berikutnya muncul dalam 0.12 detik
+                    setTimeout(spawnRat, 120);
                 }
             }, currentRat.escapeTime);
-
-            drawGame();
         }
 
-        // Respon Sentuhan Instan di Layar HP
+        // Interaksi Sentuh (Tap HP)
         canvas.addEventListener('pointerdown', function(event) {
             if (!gameActive || currentRat.holeIndex === -1) return;
 
@@ -125,23 +129,32 @@
             const targetHole = holes[currentRat.holeIndex];
             const distance = Math.hypot(clickX - targetHole.x, clickY - targetHole.y);
 
-            if (distance < 45) { // Area tap nyaman di HP
+            if (distance < 45) {
                 clearTimeout(currentRat.timer);
                 score += 10;
                 scoreText.innerText = "Skor: " + score;
                 statusText.innerText = "POW! 💥";
 
                 currentRat.holeIndex = -1;
-                drawGame();
-
-                setTimeout(spawnRat, 100); // Langsung respawn instan
+                setTimeout(spawnRat, 100);
             }
         });
+
+        // GAME LOOP (PENGGERAK ANIMASI 60 FPS)
+        function gameLoop(timestamp) {
+            if (timestamp - lastFrameTime > frameInterval) {
+                currentFrame = (currentFrame + 1) % TOTAL_FRAMES;
+                lastFrameTime = timestamp;
+            }
+
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
 
         function drawGame() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Rumput Taman
+            // Lapangan Rumput
             ctx.fillStyle = '#2e7d32';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -155,23 +168,37 @@
                 ctx.strokeStyle = '#000000';
                 ctx.stroke();
 
-                // Tikus
+                // RENDERING SPRITE ANIMASI
                 if (index === currentRat.holeIndex) {
-                    ctx.fillStyle = '#ffb74d';
-                    ctx.beginPath();
-                    ctx.arc(hole.x, hole.y - 5, 25, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
+                    if (spriteSheet.complete && spriteSheet.naturalWidth !== 0) {
+                        const frameWidth = spriteSheet.naturalWidth / SPRITE_COLS;
+                        const frameHeight = spriteSheet.naturalHeight / SPRITE_ROWS;
 
-                    // Mata
-                    ctx.fillStyle = '#000';
-                    ctx.fillRect(hole.x - 8, hole.y - 12, 5, 5);
-                    ctx.fillRect(hole.x + 3, hole.y - 12, 5, 5);
+                        const col = currentFrame % SPRITE_COLS;
+                        const row = Math.floor(currentFrame / SPRITE_COLS);
+
+                        const srcX = col * frameWidth;
+                        const srcY = row * frameHeight;
+
+                        ctx.drawImage(
+                            spriteSheet,
+                            srcX, srcY, frameWidth, frameHeight,
+                            hole.x - 35, hole.y - 40, 70, 70
+                        );
+                    } else {
+                        // Cadangan jika sprite belum ter-load
+                        ctx.fillStyle = '#ffb74d';
+                        ctx.beginPath();
+                        ctx.arc(hole.x, hole.y - 5, 25, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                    }
                 }
             });
         }
 
         spawnRat();
+        requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html>
