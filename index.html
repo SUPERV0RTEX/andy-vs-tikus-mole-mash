@@ -1,196 +1,120 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Andy vs Tikus - MoleMash Game</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #1a1a1a;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-        }
-        #game-container {
-            text-align: center;
-            background: #2e7d32;
-            border: 4px solid #fff;
-            border-radius: 12px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
-            padding: 10px;
-        }
-        canvas {
-            background: #4caf50;
-            border-radius: 8px;
-            cursor: pointer;
-            display: block;
-            margin: 0 auto;
-        }
-        .ui-panel {
-            display: flex;
-            justify-content: space-around;
-            width: 360px;
-            margin-bottom: 10px;
-            font-size: 16px;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-    <div id="game-container">
-        <h3>🧹 Andy vs Tikus Taman </h3>
-        <div class="ui-panel">
-            <span id="score-text">Skor: 0</span>
-            <span id="status-text">Status: Siap!</span>
-        </div>
-        <!-- Canvas Game (Tampilan Taman & Lubang) -->
-        <canvas id="gameCanvas" width="360" height="480"></canvas>
-    </div>
+    const scoreText = document.getElementById('score-text');
+    const statusText = document.getElementById('status-text');
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+    let score = 0;
+    let gameActive = true;
 
-        const scoreText = document.getElementById('score-text');
-        const statusText = document.getElementById('status-text');
+    // Posisi 6 Lubang Tikus
+    const holes = [
+        { x: 90, y: 120 },
+        { x: 270, y: 120 },
+        { x: 90, y: 240 },
+        { x: 270, y: 240 },
+        { x: 90, y: 360 },
+        { x: 270, y: 360 }
+    ];
 
-        // Variabel Game Utama
-        let score = 0;
-        let gameActive = true;
+    let currentRat = {
+        holeIndex: -1,
+        hp: 1,           // Mode cepat: 1x tap langsung K.O.!
+        timer: null,
+        escapeTime: 700  // AWAL: 0,7 detik (di bawah 1 detik!)
+    };
 
-        // Posisi 6 Lubang Tikus di Taman (Berdasarkan Sketsa Denahmu)
-        const holes = [
-            { x: 90, y: 120 },
-            { x: 270, y: 120 },
-            { x: 90, y: 240 },
-            { x: 270, y: 240 },
-            { x: 90, y: 360 },
-            { x: 270, y: 360 }
-        ];
+    function spawnRat() {
+        if (!gameActive) return;
 
-        // Objek Tikus Aktif saat ini
-        let currentRat = {
-            holeIndex: -1,
-            hp: 0,          // B006: Bar Nyawa Tikus
-            maxHp: 3,       // Butuh 3x Tap untuk mengalahkan
-            timer: null,
-            escapeTime: 2500 // A004: Durasi tap sebelum kabur (2.5 detik)
-        };
+        // Pilih lubang acak
+        let newHole;
+        do {
+            newHole = Math.floor(Math.random() * holes.length);
+        } while (newHole === currentRat.holeIndex);
 
-        // --- B005: Kemunculan Tikus Baru ---
-        function spawnRat() {
-            if (!gameActive) return;
+        currentRat.holeIndex = newHole;
+        currentRat.hp = 1; 
 
-            // Pilih lubang secara acak
-            let newHole;
-            do {
-                newHole = Math.floor(Math.random() * holes.length);
-            } while (newHole === currentRat.holeIndex);
+        // HITUNG KECEPATAN DINAMIS: Makin tinggi skor, makin ngebut!
+        // Batas paling cepat adalah 350ms (0,35 detik)
+        currentRat.escapeTime = Math.max(350, 700 - Math.floor(score / 50) * 50);
 
-            currentRat.holeIndex = newHole;
-            currentRat.hp = 3; // Reset nyawa tikus jadi 3 pukulan
-            statusText.innerText = "Status: Tikus Muncul! 🐭";
+        statusText.innerText = "Status: CEPAT! 🐭";
 
-            // Atur Timer Kabur (Jika pemain lambat -> A002 + B003)
-            clearTimeout(currentRat.timer);
-            currentRat.timer = setTimeout(() => {
-                if (currentRat.hp > 0) {
-                    // Tikus Lolos & Mengejek!
-                    statusText.innerText = "Status: Tikus Kabur! (Mengejek 😜)";
-                    currentRat.holeIndex = -1;
-                    setTimeout(spawnRat, 1000); // Muncul lagi setelah 1 detik
-                }
-            }, currentRat.escapeTime);
-
-            drawGame();
-        }
-
-        // --- Interaksi Pemain (Tap / Klik di Kanvas) ---
-        canvas.addEventListener('click', function(event) {
-            if (!gameActive || currentRat.holeIndex === -1) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const clickX = event.clientX - rect.left;
-            const clickY = event.clientY - rect.top;
-
-            const targetHole = holes[currentRat.holeIndex];
-
-            // Cek apakah klik mengenai area lubang tikus (radius 40 pixel)
-            const distance = Math.hypot(clickX - targetHole.x, clickY - targetHole.y);
-
-            if (distance < 45) {
-                // A002 + B002: Pemain Memukul + Tikus Kesakitan
-                currentRat.hp--;
-                score += 10;
-                scoreText.innerText = "Skor: " + score;
-                statusText.innerText = "Status: POUW! Tikus Kesakitan 💥";
-
-                if (currentRat.hp <= 0) {
-                    // A002 + B004: Tikus Tewas / Kemenangan
-                    clearTimeout(currentRat.timer);
-                    statusText.innerText = "Status: Hore! Tikus Tewas 🎉";
-                    currentRat.holeIndex = -1;
-                    
-                    // Jeda sejenak sebelum B005 (Kemunculan Tikus Lain)
-                    setTimeout(spawnRat, 1200);
-                }
+        // Timer kabur instan jika pemain lambat
+        clearTimeout(currentRat.timer);
+        currentRat.timer = setTimeout(() => {
+            if (currentRat.hp > 0) {
+                statusText.innerText = "Status: KETINGGALAN! 😜";
+                currentRat.holeIndex = -1;
                 drawGame();
+                // Jeda spawn super singkat (0,15 detik)
+                setTimeout(spawnRat, 150); 
             }
-        });
+        }, currentRat.escapeTime);
 
-        // --- Render Tampilan ke Layar Canvas ---
-        function drawGame() {
-            // Bersihkan Layar Taman
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGame();
+    }
 
-            // Gambar Rumput / Latar Belakang Taman
-            ctx.fillStyle = '#388e3c';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Interaksi Tap Instan (Refleks Cepat)
+    canvas.addEventListener('pointerdown', function(event) { // Pakai pointerdown agar lebih reaktif dari 'click'
+        if (!gameActive || currentRat.holeIndex === -1) return;
 
-            // Gambar 6 Lubang Tikus (B001 / A001)
-            holes.forEach((hole, index) => {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = event.clientX - rect.left;
+        const clickY = event.clientY - rect.top;
+
+        const targetHole = holes[currentRat.holeIndex];
+        const distance = Math.hypot(clickX - targetHole.x, clickY - targetHole.y);
+
+        if (distance < 50) { // Area tap dibuat sedikit lebih luas agar nyaman di HP
+            clearTimeout(currentRat.timer);
+            score += 10;
+            scoreText.innerText = "Skor: " + score;
+            statusText.innerText = "Status: POW! PERFEK 💥";
+            
+            currentRat.holeIndex = -1;
+            drawGame();
+
+            // Langsung panggil tikus baru dalam 0,1 detik!
+            setTimeout(spawnRat, 100);
+        }
+    });
+
+    function drawGame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Rumput
+        ctx.fillStyle = '#2e7d32';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Lubang
+        holes.forEach((hole, index) => {
+            ctx.beginPath();
+            ctx.arc(hole.x, hole.y, 38, 0, Math.PI * 2);
+            ctx.fillStyle = '#1b5e20';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#000000';
+            ctx.stroke();
+
+            // Tikus
+            if (index === currentRat.holeIndex) {
+                ctx.fillStyle = '#ffb74d';
                 ctx.beginPath();
-                ctx.arc(hole.x, hole.y, 35, 0, Math.PI * 2);
-                ctx.fillStyle = '#1b5e20'; // Warna lubang gelap
+                ctx.arc(hole.x, hole.y - 5, 28, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = '#000000';
                 ctx.stroke();
 
-                // Jika ada tikus di lubang ini
-                if (index === currentRat.holeIndex) {
-                    // Gambar Badan Tikus (Nanti diganti Sprite/Video Animasi)
-                    ctx.fillStyle = '#ffcc80';
-                    ctx.beginPath();
-                    ctx.arc(hole.x, hole.y - 10, 25, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
+                // Mata
+                ctx.fillStyle = '#000';
+                ctx.fillRect(hole.x - 10, hole.y - 12, 6, 6);
+                ctx.fillRect(hole.x + 4, hole.y - 12, 6, 6);
+            }
+        });
+    }
 
-                    // Mata Tikus
-                    ctx.fillStyle = '#000';
-                    ctx.fillRect(hole.x - 10, hole.y - 18, 6, 6);
-                    ctx.fillRect(hole.x + 4, hole.y - 18, 6, 6);
-
-                    // B006: Bar Nyawa Tikus (HP Bar di atas kepala tikus)
-                    ctx.fillStyle = '#d32f2f';
-                    ctx.fillRect(hole.x - 20, hole.y - 45, 40, 6);
-                    ctx.fillStyle = '#388e3c';
-                    let healthWidth = (currentRat.hp / currentRat.maxHp) * 40;
-                    ctx.fillRect(hole.x - 20, hole.y - 45, healthWidth, 6);
-                }
-            });
-        }
-
-        // Mulai Game Pertama Kali
-        spawnRat();
-    </script>
-</body>
-</html>
+    spawnRat();
+</script>
