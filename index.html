@@ -1,120 +1,177 @@
-<script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Andy vs Tikus - MoleMash</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation; /* Mencegah zoom ganda saat tap cepat di HP */
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #121212;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            text-align: center;
+            background: #1b5e20;
+            border: 3px solid #ffffff;
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.6);
+        }
+        .ui-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 320px;
+            margin: 0 auto 10px auto;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        canvas {
+            background: #388e3c;
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
 
-    const scoreText = document.getElementById('score-text');
-    const statusText = document.getElementById('status-text');
+    <div id="game-container">
+        <h3 style="margin: 5px 0 10px 0;">🧹 Andy vs Tikus</h3>
+        <div class="ui-panel">
+            <span id="score-text">Skor: 0</span>
+            <span id="status-text" style="color: #ffeb3b;">Siap!</span>
+        </div>
+        <canvas id="gameCanvas" width="320" height="420"></canvas>
+    </div>
 
-    let score = 0;
-    let gameActive = true;
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-    // Posisi 6 Lubang Tikus
-    const holes = [
-        { x: 90, y: 120 },
-        { x: 270, y: 120 },
-        { x: 90, y: 240 },
-        { x: 270, y: 240 },
-        { x: 90, y: 360 },
-        { x: 270, y: 360 }
-    ];
+        const scoreText = document.getElementById('score-text');
+        const statusText = document.getElementById('status-text');
 
-    let currentRat = {
-        holeIndex: -1,
-        hp: 1,           // Mode cepat: 1x tap langsung K.O.!
-        timer: null,
-        escapeTime: 700  // AWAL: 0,7 detik (di bawah 1 detik!)
-    };
+        let score = 0;
+        let gameActive = true;
 
-    function spawnRat() {
-        if (!gameActive) return;
+        // Posisi 6 Lubang Tikus
+        const holes = [
+            { x: 80, y: 100 },
+            { x: 240, y: 100 },
+            { x: 80, y: 210 },
+            { x: 240, y: 210 },
+            { x: 80, y: 320 },
+            { x: 240, y: 320 }
+        ];
 
-        // Pilih lubang acak
-        let newHole;
-        do {
-            newHole = Math.floor(Math.random() * holes.length);
-        } while (newHole === currentRat.holeIndex);
+        let currentRat = {
+            holeIndex: -1,
+            hp: 1,
+            timer: null,
+            escapeTime: 650 // Durasinya hanya 0.65 detik!
+        };
 
-        currentRat.holeIndex = newHole;
-        currentRat.hp = 1; 
+        function spawnRat() {
+            if (!gameActive) return;
 
-        // HITUNG KECEPATAN DINAMIS: Makin tinggi skor, makin ngebut!
-        // Batas paling cepat adalah 350ms (0,35 detik)
-        currentRat.escapeTime = Math.max(350, 700 - Math.floor(score / 50) * 50);
+            let newHole;
+            do {
+                newHole = Math.floor(Math.random() * holes.length);
+            } while (newHole === currentRat.holeIndex);
 
-        statusText.innerText = "Status: CEPAT! 🐭";
+            currentRat.holeIndex = newHole;
+            currentRat.hp = 1;
 
-        // Timer kabur instan jika pemain lambat
-        clearTimeout(currentRat.timer);
-        currentRat.timer = setTimeout(() => {
-            if (currentRat.hp > 0) {
-                statusText.innerText = "Status: KETINGGALAN! 😜";
+            // Semakin tinggi skor, durasi makin cepat (minimal 0.35 detik)
+            currentRat.escapeTime = Math.max(350, 650 - Math.floor(score / 50) * 40);
+
+            statusText.innerText = "CEPAT! 🐭";
+
+            clearTimeout(currentRat.timer);
+            currentRat.timer = setTimeout(() => {
+                if (currentRat.hp > 0) {
+                    statusText.innerText = "KABUR! 😜";
+                    currentRat.holeIndex = -1;
+                    drawGame();
+                    setTimeout(spawnRat, 120); // Tikus berikutnya muncul dalam 0.12 detik
+                }
+            }, currentRat.escapeTime);
+
+            drawGame();
+        }
+
+        // Respon Sentuhan Instan di Layar HP
+        canvas.addEventListener('pointerdown', function(event) {
+            if (!gameActive || currentRat.holeIndex === -1) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+
+            const targetHole = holes[currentRat.holeIndex];
+            const distance = Math.hypot(clickX - targetHole.x, clickY - targetHole.y);
+
+            if (distance < 45) { // Area tap nyaman di HP
+                clearTimeout(currentRat.timer);
+                score += 10;
+                scoreText.innerText = "Skor: " + score;
+                statusText.innerText = "POW! 💥";
+
                 currentRat.holeIndex = -1;
                 drawGame();
-                // Jeda spawn super singkat (0,15 detik)
-                setTimeout(spawnRat, 150); 
-            }
-        }, currentRat.escapeTime);
 
-        drawGame();
-    }
-
-    // Interaksi Tap Instan (Refleks Cepat)
-    canvas.addEventListener('pointerdown', function(event) { // Pakai pointerdown agar lebih reaktif dari 'click'
-        if (!gameActive || currentRat.holeIndex === -1) return;
-
-        const rect = canvas.getBoundingClientRect();
-        const clickX = event.clientX - rect.left;
-        const clickY = event.clientY - rect.top;
-
-        const targetHole = holes[currentRat.holeIndex];
-        const distance = Math.hypot(clickX - targetHole.x, clickY - targetHole.y);
-
-        if (distance < 50) { // Area tap dibuat sedikit lebih luas agar nyaman di HP
-            clearTimeout(currentRat.timer);
-            score += 10;
-            scoreText.innerText = "Skor: " + score;
-            statusText.innerText = "Status: POW! PERFEK 💥";
-            
-            currentRat.holeIndex = -1;
-            drawGame();
-
-            // Langsung panggil tikus baru dalam 0,1 detik!
-            setTimeout(spawnRat, 100);
-        }
-    });
-
-    function drawGame() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Rumput
-        ctx.fillStyle = '#2e7d32';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Lubang
-        holes.forEach((hole, index) => {
-            ctx.beginPath();
-            ctx.arc(hole.x, hole.y, 38, 0, Math.PI * 2);
-            ctx.fillStyle = '#1b5e20';
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#000000';
-            ctx.stroke();
-
-            // Tikus
-            if (index === currentRat.holeIndex) {
-                ctx.fillStyle = '#ffb74d';
-                ctx.beginPath();
-                ctx.arc(hole.x, hole.y - 5, 28, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-
-                // Mata
-                ctx.fillStyle = '#000';
-                ctx.fillRect(hole.x - 10, hole.y - 12, 6, 6);
-                ctx.fillRect(hole.x + 4, hole.y - 12, 6, 6);
+                setTimeout(spawnRat, 100); // Langsung respawn instan
             }
         });
-    }
 
-    spawnRat();
-</script>
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Rumput Taman
+            ctx.fillStyle = '#2e7d32';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Gambar 6 Lubang
+            holes.forEach((hole, index) => {
+                ctx.beginPath();
+                ctx.arc(hole.x, hole.y, 35, 0, Math.PI * 2);
+                ctx.fillStyle = '#1b5e20';
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#000000';
+                ctx.stroke();
+
+                // Tikus
+                if (index === currentRat.holeIndex) {
+                    ctx.fillStyle = '#ffb74d';
+                    ctx.beginPath();
+                    ctx.arc(hole.x, hole.y - 5, 25, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Mata
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(hole.x - 8, hole.y - 12, 5, 5);
+                    ctx.fillRect(hole.x + 3, hole.y - 12, 5, 5);
+                }
+            });
+        }
+
+        spawnRat();
+    </script>
+</body>
+</html>
