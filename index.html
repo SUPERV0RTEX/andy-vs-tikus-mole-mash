@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Andy vs Tikus - Smooth Animated</title>
+    <title>Andy vs Tikus - Combo Beatdown</title>
     <style>
         * {
             box-sizing: border-box;
@@ -33,7 +33,7 @@
         .ui-panel {
             display: flex;
             justify-content: space-between;
-            width: 320px;
+            width: 330px;
             margin: 0 auto 10px auto;
             font-size: 16px;
             font-weight: bold;
@@ -50,12 +50,12 @@
 <body>
 
     <div id="game-container">
-        <h3 style="margin: 5px 0 10px 0;">🧹 Andy vs Tikus (Animated)</h3>
+        <h3 style="margin: 5px 0 10px 0;">🧹 Andy vs Tikus (Combo Beatdown)</h3>
         <div class="ui-panel">
             <span id="score-text">Skor: 0</span>
-            <span id="status-text" style="color: #ffeb3b;">Siap!</span>
+            <span id="status-text" style="color: #ffeb3b;">Incar Tikus! 🐭</span>
         </div>
-        <canvas id="gameCanvas" width="320" height="420"></canvas>
+        <canvas id="gameCanvas" width="340" height="440"></canvas>
     </div>
 
     <script>
@@ -65,34 +65,46 @@
         const scoreText = document.getElementById('score-text');
         const statusText = document.getElementById('status-text');
 
-        // MEMUAT SPRITE SHEET 5 KOLOM x 2 BARIS (10 FRAME)
-        const spriteSheet = new Image();
-        spriteSheet.src = 'tikus_spritesheet.png'; 
+        // SPRITE SHEET 1: Tikus Lari/Muncul (5x2 grid)
+        const spriteRun = new Image();
+        spriteRun.src = 'tikus_spritesheet.png';
 
-        const SPRITE_COLS = 5;      // 5 Kolom
-        const SPRITE_ROWS = 2;      // 2 Baris
-        const TOTAL_FRAMES = 10;    // Total 10 Frame Animasi
+        // SPRITE SHEET 2: Tikus Dipukuli/Kesakitan (5x2 grid)
+        const spriteHit = new Image();
+        spriteHit.src = 'tikus_pukuli.png'; 
+
+        const COLS = 5;
+        const ROWS = 2;
+        const TOTAL_FRAMES = 10;
         
         let currentFrame = 0;
         let lastFrameTime = 0;
-        const frameInterval = 70;   // Kecepatan animasi (~14 FPS)
+        const frameInterval = 70; // Kecepatan putar animasi (~14 FPS)
 
         let score = 0;
         let gameActive = true;
 
+        // UKURAN IKON TIKUS
+        const RUN_SIZE = 95;   // Ukuran saat lari (diperbesar)
+        const HIT_SIZE = 145;  // Ukuran RAKSASA saat dipukuli (puas dilihat!)
+
         const holes = [
-            { x: 80, y: 100 },
-            { x: 240, y: 100 },
-            { x: 80, y: 210 },
-            { x: 240, y: 210 },
-            { x: 80, y: 320 },
-            { x: 240, y: 320 }
+            { x: 85, y: 100 },
+            { x: 255, y: 100 },
+            { x: 85, y: 220 },
+            { x: 255, y: 220 },
+            { x: 85, y: 340 },
+            { x: 255, y: 340 }
         ];
 
         let currentRat = {
             holeIndex: -1,
-            timer: null,
-            escapeTime: 650
+            state: 'NONE', // 'RUNNING', 'STUNNED', 'TAUNT', 'DEAD'
+            tapsCount: 0,
+            tapsRequired: 5, // Butuh 5x pukulan untuk menumbangkan tikus
+            escapeTimer: null,
+            stunTimer: null,
+            escapeTime: 700
         };
 
         function spawnRat() {
@@ -104,21 +116,28 @@
             } while (newHole === currentRat.holeIndex);
 
             currentRat.holeIndex = newHole;
+            currentRat.state = 'RUNNING';
+            currentRat.tapsCount = 0;
 
-            currentRat.escapeTime = Math.max(350, 650 - Math.floor(score / 50) * 40);
-            statusText.innerText = "CEPAT! 🐭";
+            // Kecepatan lari makin cepat seiring bertambahnya skor
+            currentRat.escapeTime = Math.max(300, 700 - Math.floor(score / 50) * 45);
+            statusText.innerText = "INCAR TIKUS! 🐭";
+            statusText.style.color = "#ffeb3b";
 
-            clearTimeout(currentRat.timer);
-            currentRat.timer = setTimeout(() => {
-                if (currentRat.holeIndex !== -1) {
-                    statusText.innerText = "KABUR! 😜";
+            clearTimeout(currentRat.escapeTimer);
+            clearTimeout(currentRat.stunTimer);
+
+            currentRat.escapeTimer = setTimeout(() => {
+                if (currentRat.state === 'RUNNING') {
+                    statusText.innerText = "KABUR! 💨";
                     currentRat.holeIndex = -1;
-                    setTimeout(spawnRat, 120);
+                    currentRat.state = 'NONE';
+                    setTimeout(spawnRat, 150);
                 }
             }, currentRat.escapeTime);
         }
 
-        // Interaksi Sentuh (Tap HP)
+        // TANGPAN SENTUHAN / TAP PEMAIN
         canvas.addEventListener('pointerdown', function(event) {
             if (!gameActive || currentRat.holeIndex === -1) return;
 
@@ -127,20 +146,73 @@
             const clickY = event.clientY - rect.top;
 
             const targetHole = holes[currentRat.holeIndex];
+            
+            // Hitbox melebar saat tikus berukuran raksasa
+            const hitRadius = (currentRat.state === 'STUNNED') ? 70 : 50;
             const distance = Math.hypot(clickX - targetHole.x, clickY - targetHole.y);
 
-            if (distance < 45) {
-                clearTimeout(currentRat.timer);
-                score += 10;
-                scoreText.innerText = "Skor: " + score;
-                statusText.innerText = "POW! 💥";
+            if (distance < hitRadius) {
+                if (currentRat.state === 'RUNNING') {
+                    // PUKULAN PERTAMA: KUNCI TIKUS (STUN)
+                    clearTimeout(currentRat.escapeTimer);
+                    currentRat.state = 'STUNNED';
+                    currentRat.tapsCount = 1;
+                    score += 10;
+                    scoreText.innerText = "Skor: " + score;
 
-                currentRat.holeIndex = -1;
-                setTimeout(spawnRat, 100);
+                    statusText.innerText = `KUNCI! PUKUL! 🥊 (1/${currentRat.tapsRequired})`;
+                    statusText.style.color = "#ff9800";
+
+                    startStunWindow();
+
+                } else if (currentRat.state === 'STUNNED') {
+                    // PUKULAN BERUNTUN (COMBO dalam 1 Detik)
+                    clearTimeout(currentRat.stunTimer); // Reset hitungan 1 detik
+                    currentRat.tapsCount++;
+                    score += 15;
+                    scoreText.innerText = "Skor: " + score;
+
+                    if (currentRat.tapsCount >= currentRat.tapsRequired) {
+                        // TIKUS MATI / FINISHED!
+                        currentRat.state = 'DEAD';
+                        score += 50; // Bonus Kill
+                        scoreText.innerText = "Skor: " + score;
+                        statusText.innerText = "MODAR! 💥💀";
+                        statusText.style.color = "#f44336";
+
+                        setTimeout(() => {
+                            currentRat.holeIndex = -1;
+                            currentRat.state = 'NONE';
+                            setTimeout(spawnRat, 200);
+                        }, 400);
+                    } else {
+                        statusText.innerText = `HAJAR TRUS! 💥 (${currentRat.tapsCount}/${currentRat.tapsRequired})`;
+                        startStunWindow(); // Mulai ulang timer 1 detik
+                    }
+                }
             }
         });
 
-        // GAME LOOP (PENGGERAK ANIMASI 60 FPS)
+        // WAKTU TIKUS TERKUNCI (1 DETIK)
+        function startStunWindow() {
+            clearTimeout(currentRat.stunTimer);
+            currentRat.stunTimer = setTimeout(() => {
+                // Jika pemain terlalu lambat (jeda > 1 detik)
+                if (currentRat.state === 'STUNNED') {
+                    currentRat.state = 'TAUNT';
+                    statusText.innerText = "NGEJEK! 😜 WLEE~";
+                    statusText.style.color = "#e91e63";
+
+                    setTimeout(() => {
+                        currentRat.holeIndex = -1;
+                        currentRat.state = 'NONE';
+                        setTimeout(spawnRat, 300);
+                    }, 700);
+                }
+            }, 1000); // Window 1 detik untuk pukulan berikutnya
+        }
+
+        // GAME LOOP (60 FPS)
         function gameLoop(timestamp) {
             if (timestamp - lastFrameTime > frameInterval) {
                 currentFrame = (currentFrame + 1) % TOTAL_FRAMES;
@@ -161,40 +233,59 @@
             // Gambar 6 Lubang
             holes.forEach((hole, index) => {
                 ctx.beginPath();
-                ctx.arc(hole.x, hole.y, 35, 0, Math.PI * 2);
+                ctx.arc(hole.x, hole.y, 40, 0, Math.PI * 2);
                 ctx.fillStyle = '#1b5e20';
                 ctx.fill();
                 ctx.lineWidth = 3;
                 ctx.strokeStyle = '#000000';
                 ctx.stroke();
 
-                // RENDERING SPRITE ANIMASI
+                // RENDERING ANIMASI TIKUS
                 if (index === currentRat.holeIndex) {
-                    if (spriteSheet.complete && spriteSheet.naturalWidth !== 0) {
-                        const frameWidth = spriteSheet.naturalWidth / SPRITE_COLS;
-                        const frameHeight = spriteSheet.naturalHeight / SPRITE_ROWS;
-
-                        const col = currentFrame % SPRITE_COLS;
-                        const row = Math.floor(currentFrame / SPRITE_COLS);
-
-                        const srcX = col * frameWidth;
-                        const srcY = row * frameHeight;
-
-                        ctx.drawImage(
-                            spriteSheet,
-                            srcX, srcY, frameWidth, frameHeight,
-                            hole.x - 35, hole.y - 40, 70, 70
-                        );
-                    } else {
-                        // Cadangan jika sprite belum ter-load
-                        ctx.fillStyle = '#ffb74d';
-                        ctx.beginPath();
-                        ctx.arc(hole.x, hole.y - 5, 25, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
+                    
+                    // STATUS 1: Tikus Berlarian (Pakai Sprite 1 - tikus_spritesheet.png)
+                    if (currentRat.state === 'RUNNING') {
+                        renderSprite(spriteRun, hole.x, hole.y, RUN_SIZE);
+                    } 
+                    // STATUS 2 & DEAD: Tikus Dipukuli (Pakai Sprite 2 - tikus_pukuli.png - RAKSASA)
+                    else if (currentRat.state === 'STUNNED' || currentRat.state === 'DEAD') {
+                        renderSprite(spriteHit, hole.x, hole.y, HIT_SIZE);
+                    } 
+                    // STATUS 3: Tikus Mengejek (Lolos)
+                    else if (currentRat.state === 'TAUNT') {
+                        ctx.fillStyle = '#ffeb3b';
+                        ctx.font = 'bold 22px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('😜 WLEEE~', hole.x, hole.y - 10);
                     }
                 }
             });
+        }
+
+        function renderSprite(imgObj, x, y, size) {
+            if (imgObj.complete && imgObj.naturalWidth !== 0) {
+                const frameWidth = imgObj.naturalWidth / COLS;
+                const frameHeight = imgObj.naturalHeight / ROWS;
+
+                const col = currentFrame % COLS;
+                const row = Math.floor(currentFrame / COLS);
+
+                const srcX = col * frameWidth;
+                const srcY = row * frameHeight;
+
+                // Render gambar tepat di tengah lubang
+                ctx.drawImage(
+                    imgObj,
+                    srcX, srcY, frameWidth, frameHeight,
+                    x - (size / 2), y - (size / 2), size, size
+                );
+            } else {
+                // Cadangan jika sprite belum ter-load
+                ctx.fillStyle = '#ffb74d';
+                ctx.beginPath();
+                ctx.arc(x, y - 5, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
         spawnRat();
