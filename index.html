@@ -86,7 +86,7 @@
 
         // UKURAN IKON TIKUS
         const RUN_SIZE = 95;   // Ukuran saat lari (diperbesar)
-        const HIT_SIZE = 145;  // Ukuran RAKSASA saat dipukuli (puas dilihat!)
+        const HIT_SIZE = 155;  // Ukuran RAKSASA saat dipukuli (puas dilihat!)
 
         const holes = [
             { x: 85, y: 100 },
@@ -101,7 +101,7 @@
             holeIndex: -1,
             state: 'NONE', // 'RUNNING', 'STUNNED', 'TAUNT', 'DEAD'
             tapsCount: 0,
-            tapsRequired: 5, // Butuh 5x pukulan untuk menumbangkan tikus
+            tapsRequired: 10, // Butuh 5x pukulan untuk menumbangkan tikus
             escapeTimer: null,
             stunTimer: null,
             escapeTime: 700
